@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cronómetros Grid</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background-color: #f0f0f0;
+        }
+
+        .container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .timer-container {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .timer-display {
+            font-size: 2em;
+            text-align: center;
+            margin: 10px 0;
+            font-family: monospace;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        button {
+            padding: 8px 15px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            flex: 1;
+        }
+
+        .start-btn {
+            background-color: #4CAF50;
+            color: white;
+        }
+
+        .pause-btn {
+            background-color: #ff9800;
+            color: white;
+        }
+
+        .reset-btn {
+            background-color: #f44336;
+            color: white;
+        }
+
+        .delete-btn {
+            background-color: #607d8b;
+            color: white;
+        }
+
+        .add-btn {
+            background-color: #2196F3;
+            color: white;
+            padding: 15px 30px;
+            font-size: 1.1em;
+        }
+
+        .timer-label {
+            width: 100%;
+            padding: 5px;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            text-align: center;
+            font-size: 1.1em;
+        }
+    </style>
+</head>
+<body>
+    <button class="add-btn" onclick="addTimer()">➕ Agregar Cronómetro</button>
+    <div class="container" id="timersContainer"></div>
+
+    <script>
+        class Stopwatch {
+            constructor(id, savedData = null) {
+                this.id = id || Date.now();
+                this.isRunning = false;
+                this.startTime = 0;
+                this.elapsed = 0;
+                this.interval = null;
+                this.label = savedData?.label || 'Cronómetro';
+                
+                this.createDOM();
+                if(savedData) {
+                    this.elapsed = savedData.elapsed;
+                    this.isRunning = savedData.isRunning;
+                    this.label = savedData.label;
+                    this.updateDisplay();
+                    if(this.isRunning) this.start();
+                }
+            }
+
+            createDOM() {
+                this.container = document.createElement('div');
+                this.container.className = 'timer-container';
+                this.container.innerHTML = `
+                    <div class="timer-label" contenteditable="true">${this.label}</div>
+                    <div class="timer-display">00:00:00.00</div>
+                    <div class="button-group">
+                        <button class="start-btn">Inicio</button>
+                        <button class="pause-btn">Pausa</button>
+                        <button class="reset-btn">Reset</button>
+                        <button class="delete-btn">Eliminar</button>
+                    </div>
+                `;
+
+                this.display = this.container.querySelector('.timer-display');
+                this.labelElement = this.container.querySelector('.timer-label');
+                
+                this.container.querySelector('.start-btn').addEventListener('click', () => this.start());
+                this.container.querySelector('.pause-btn').addEventListener('click', () => this.pause());
+                this.container.querySelector('.reset-btn').addEventListener('click', () => this.reset());
+                this.container.querySelector('.delete-btn').addEventListener('click', () => this.delete());
+                
+                this.labelElement.addEventListener('input', () => {
+                    this.label = this.labelElement.textContent;
+                    this.saveToLocalStorage();
+                });
+            }
+
+            start() {
+                if(!this.isRunning) {
+                    this.startTime = Date.now() - this.elapsed;
+                    this.interval = setInterval(() => this.update(), 10);
+                    this.isRunning = true;
+                    this.saveToLocalStorage();
+                }
+            }
+
+            pause() {
+                if(this.isRunning) {
+                    clearInterval(this.interval);
+                    this.isRunning = false;
+                    this.saveToLocalStorage();
+                }
+            }
+
+            reset() {
+                this.pause();
+                this.elapsed = 0;
+                this.updateDisplay();
+                this.saveToLocalStorage();
+            }
+
+            delete() {
+                this.pause();
+                this.container.remove();
+                localStorage.removeItem(`stopwatch_${this.id}`);
+            }
+
+            update() {
+                this.elapsed = Date.now() - this.startTime;
+                this.updateDisplay();
+            }
+
+            updateDisplay() {
+                const time = new Date(this.elapsed);
+                const hours = time.getUTCHours().toString().padStart(2, '0');
+                const minutes = time.getUTCMinutes().toString().padStart(2, '0');
+                const seconds = time.getUTCSeconds().toString().padStart(2, '0');
+                const milliseconds = Math.floor(time.getUTCMilliseconds() / 10).toString().padStart(2, '0');
+                this.display.textContent = `${hours}:${minutes}:${seconds}.${milliseconds}`;
+            }
+
+            saveToLocalStorage() {
+                const data = {
+                    id: this.id,
+                    elapsed: this.elapsed,
+                    isRunning: this.isRunning,
+                    label: this.label
+                };
+                localStorage.setItem(`stopwatch_${this.id}`, JSON.stringify(data));
+            }
+        }
+
+        function addTimer() {
+            const timer = new Stopwatch();
+            document.getElementById('timersContainer').appendChild(timer.container);
+            timer.saveToLocalStorage();
+        }
+
+        // Cargar timers guardados al iniciar
+        window.addEventListener('load', () => {
+            const timersContainer = document.getElementById('timersContainer');
+            for(let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if(key.startsWith('stopwatch_')) {
+                    const savedData = JSON.parse(localStorage.getItem(key));
+                    const timer = new Stopwatch(savedData.id, savedData);
+                    timersContainer.appendChild(timer.container);
+                }
+            }
+        });
+    </script>
+</body>
+</html>
